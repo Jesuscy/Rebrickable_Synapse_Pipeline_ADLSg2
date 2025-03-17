@@ -1,3 +1,4 @@
+import io
 from bs4 import BeautifulSoup
 import requests
 import os
@@ -43,12 +44,9 @@ for i in li:
     links.append(a['href'])    
 
 for link in links:
-    fileZip = requests.get(link)
-    # Abrir el archivo ZIP desde la memoria
-    with zipfile.ZipFile(io.BytesIO(fileZip.content), 'r') as zip_ref:
-        # Extraer el contenido al directorio de extracción
-        zip_ref.extractall(extract_dir)
 
-    filename = link.split('/')[-1]
-    print(filename)
-    
+    response = requests.get(link)
+    # Abrir el archivo ZIP desde la memoria
+    zip_bytes = io.BytesIO(response.content)  # Cargar en memoria
+    with zipfile.ZipFile(zip_bytes, 'r') as z:
+        print(z)    

@@ -2,6 +2,7 @@ import os
 import azure.functions as func
 import logging
 import requests
+import zipfile
 from bs4 import BeautifulSoup
 from azure.storage.filedatalake import DataLakeServiceClient
 from azure.identity import DefaultAzureCredential
@@ -56,9 +57,14 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
         #Fin Extraer enlaces de la página
 
         #Descargar los archivos
-        for link in links
+        for link in links:
+            response = requests.get(link)
+            # Abrir el archivo ZIP desde la memoria
+            zip_bytes = io.BytesIO(response.content)  # Cargar en memoria
+            with zipfile.ZipFile(zip_bytes, 'r') as z:
+                print(z)
 
-
+                
         # Respuesta en JSON
         return func.HttpResponse(
             json.dumps({"links": links}),
