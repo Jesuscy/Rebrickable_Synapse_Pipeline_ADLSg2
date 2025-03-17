@@ -1,10 +1,22 @@
+import os
 import azure.functions as func
 import logging
 import requests
 from bs4 import BeautifulSoup
-import json
+from azure.storage.filedatalake import DataLakeServiceClient
+from azure.identity import DefaultAzureCredential
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+
+#Obtener cliente de Azure Data Lake
+def get_service_client_token_credential(self, account_name) -> DataLakeServiceClient:
+    account_url = f"https://{account_name}.dfs.core.windows.net"
+    token_credential = DefaultAzureCredential()
+
+    service_client = DataLakeServiceClient(account_url, credential=token_credential)
+
+    return service_client
+
 
 @app.route(route="http_trigger")
 def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
@@ -13,12 +25,17 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
     url = 'https://rebrickable.com/downloads/'
 
     try:
+        datalake_client = get_service_client_token_credential(os.getenv('STORAGE_ACCOUNT_NAME'))
+
+        #Inicio Extraer enlaces de la página
         # Obtener el HTML de la página
         res = requests.get(url)
         res.raise_for_status()  # Lanza un error si la respuesta no es 200
 
         # Parsear la página
         soup = BeautifulSoup(res.text, 'html.parser')
+        
+        #Recorrer página hasta lista de enlaces
         body = soup.find('body')
         wrapper = body.find('div', {'id': 'wrapper'})
         content = wrapper.find('div', {'id': 'content'})
@@ -27,8 +44,7 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
         col = row.find('div', {'class': 'col-md-5'})
         ul = col.find('ul', {'class': 'list-unstyled'})
         li = ul.find_all('li')
-
-        # Extraer los enlaces
+       
         links = []
         for i in li:
             span = i.find('span')
@@ -36,6 +52,11 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
             if a and 'href' in a.attrs:
                 links.append(a['href'])
                 print(a['href'])
+       
+        #Fin Extraer enlaces de la página
+
+        #Descargar los archivos
+        for link in links
 
 
         # Respuesta en JSON
