@@ -1,5 +1,7 @@
 import json
 import os
+import io
+import gzip
 import azure.functions as func
 import logging
 import requests
@@ -12,10 +14,9 @@ today = datetime.date.today()
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 
 #Obtener cliente de Azure Data Lake
-def get_service_client_token_credential(self, account_name) -> DataLakeServiceClient:
+def get_service_client_token_credential(account_name) -> DataLakeServiceClient:
     account_url = f"https://{account_name}.dfs.core.windows.net"
     token_credential = DefaultAzureCredential()
-
     service_client = DataLakeServiceClient(account_url, credential=token_credential)
 
     return service_client
@@ -59,26 +60,27 @@ def downloadFiles(links):
         # Cargar en memoria
         with gzip.GzipFile(fileobj=gz_file_bytes, mode='rb') as gz:
             file_content = gz.read()
-            file = {filename, file_content}
+            file = {'filename':filename, 'filecontent':file_content}
             files.append(file)
     return files
 
 #Subir Archivos al Data Lake
-def uploadFiles(files):
-    file_system_client = DataLakeServiceClient.get_file_system_client('raw')
+def uploadFiles(files, datalake_client):
+    file_system_client = datalake_client.get_file_system_client('raw')
     file_system_directory = file_system_client.get_directory_client(directory='Rebrickable')
     for file in files:
         
-        if not file_system_directory.get_file_client(file.filename).exists():
-            file_system_directory.create_directory(file.filename)
+        if not file_system_directory.get_file_client(file['filename']).exists():
+            file_system_directory.create_directory(file['filename'])
         
-        elif file_system_directory.get_file_client(file.filename).exists():
-            dl_empty_file = file_system_directory.create_file(file.filename)
-            dl_empty_file.append_data(data=file.file_content, offset=0, length=len(file.file_content))
-            dl_empty_file.flush_data(len(file.file_content))
-        
+        elif file_system_directory.get_file_client(file['filename']).exists():
+            #Creo archivo vacío en dl y luego subo el contenido 
+            dl_empty_file = file_system_directory.create_file(today)
+            dl_file = dl_empty_file.append_data(data=file['filecontent'], offset=0, length=len(file['filecontent']))
+            dl_file.flush_data(len(file['filecontent']))
+            logging.info(f"Archivo {file['filename']} subido correctamente")
         else:
-            logging.error(f"Error al subir archivo {file.filename}")
+            logging.error(f"Error al subir archivo {file['filename']}")
 
 
 @app.route(route="http_trigger")
@@ -93,7 +95,7 @@ def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
         #Descargar los archivos
         files = downloadFiles(links)
         #Subir los archivos al Data Lake
-        uploadFiles(files)
+        uploadFiles(files,datalake_client)
 
         # Respuesta en JSON
         return func.HttpResponse(
