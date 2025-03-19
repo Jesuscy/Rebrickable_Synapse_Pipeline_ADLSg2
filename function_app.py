@@ -53,15 +53,21 @@ def getFileLinks(url):
 def downloadFiles(links):
     files = []
     for link in links:
-        filename = link.split('/')[-1].split('.gz')[0]
-        response = requests.get(link)
-        # Abrir el archivo ZIP desde la memoria
-        gz_file_bytes = io.BytesIO(response.content) 
-        # Cargar en memoria
-        with gzip.GzipFile(fileobj=gz_file_bytes, mode='rb') as gz:
-            file_content = gz.read()
-            file = {'filename':filename, 'filecontent':file_content}
-            files.append(file)
+        try:
+            filename = link.split('/')[-1].split('.gz')[0]
+            response = requests.get(link)
+            # Abrir el archivo ZIP desde la memoria
+            gz_file_bytes = io.BytesIO(response.content) 
+            # Cargar en memoria
+            with gzip.GzipFile(fileobj=gz_file_bytes, mode='rb') as gz:
+                file_content = gz.read()
+                file = {'filename':filename, 'filecontent':file_content}
+                files.append(file)
+        except requests.RequestException as e:
+            logging.error(f'Error al descargar {link} error:{str(e)}')
+        except gzip.BadGzipFile as e:
+            logging.error(f'Error al extraer el fichero {link} error: {str(e)}')
+    
     return files
 
 #Subir Archivos al Data Lake
@@ -69,19 +75,20 @@ def uploadFiles(files, datalake_client):
     file_system_client = datalake_client.get_file_system_client('raw')
     file_system_directory = file_system_client.get_directory_client(directory='Rebrickable')
     for file in files:
-        
-        if not file_system_directory.get_file_client(file['filename']).exists():
-            file_system_directory.create_directory(file['filename'])
-        
-        elif file_system_directory.get_file_client(file['filename']).exists():
-            #Creo archivo vacío en dl y luego subo el contenido 
-            dl_empty_file = file_system_directory.create_file(today)
-            dl_file = dl_empty_file.append_data(data=file['filecontent'], offset=0, length=len(file['filecontent']))
-            dl_file.flush_data(len(file['filecontent']))
-            logging.info(f"Archivo {file['filename']} subido correctamente")
-        else:
-            logging.error(f"Error al subir archivo {file['filename']}")
-
+        try:
+            if not file_system_directory.get_file_client(file['filename']).exists():
+                file_system_directory.create_directory(file['filename'])
+            
+            elif file_system_directory.get_file_client(file['filename']).exists():
+                #Creo archivo vacío en dl y luego subo el contenido 
+                dl_empty_file = file_system_directory.create_file(str(today))
+                dl_file = dl_empty_file.append_data(data=file['filecontent'], offset=0, length=len(file['filecontent']))
+                dl_file.flush_data(len(file['filecontent']))
+                logging.info(f"Archivo {file['filename']} subido correctamente")
+            else:
+                logging.error(f"Error al subir archivo {file['filename']}")
+        except Exception as e:
+            logging.error(f'Error al subir el fichero {str(today)} al directorio {file['filename']} error: {str(e)}')
 
 @app.route(route="http_trigger")
 def http_trigger(req: func.HttpRequest) -> func.HttpResponse:
