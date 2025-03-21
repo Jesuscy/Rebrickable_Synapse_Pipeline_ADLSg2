@@ -10,8 +10,9 @@ from bs4 import BeautifulSoup
 from azure.storage.filedatalake import DataLakeServiceClient
 from azure.identity import DefaultAzureCredential
 
-today = datetime.date.today()
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
+
+today = datetime.date.today()
 
 #Obtener cliente de Azure Data Lake
 def get_service_client_token_credential(account_name) -> DataLakeServiceClient:
